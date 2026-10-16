@@ -1,0 +1,148 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { api } from '../api'
+import { useAuth } from '../context/AuthContext'
+import { getTeacherLocation } from '../utils'
+import AttendanceForm from './AttendanceForm'
+import SessionPanel from './SessionPanel'
+import Roster from './Roster'
+
+const POLL_MS = 3000
+const BASE = '/api/attendance-sessions'
+
+export default function Dashboard() {
+  const { user, logout } = useAuth()
+  const [message, setMessage] = useState(null)
+  const [session, setSession] = useState(null)
+  const [students, setStudents] = useState([])
+  const [busy, setBusy] = useState(false)
+  const sessionId = useRef(null)
+
+  const show = useCallback((text, type = 'info') => setMessage(text ? { text, type } : null), [])
+
+  const fail = useCallback(
+    (err) => {
+      if (err.status === 401) logout()
+      else show(err.message, 'error')
+    },
+    [logout, show]
+  )
+
+  const loadRoster = useCallback(async () => {
+    const id = sessionId.current
+    if (!id) return null
+    const data = await api(`${BASE}/${id}/roster`)
+    if (sessionId.current !== id) return null
+    setStudents(data.students)
+    setSession((s) => (s && s.id === id ? { ...s, phase: data.session.phase, expiresAt: data.session.expiresAt } : s))
+    return data.session
+  }, [])
+
+  const live = session && session.phase !== 'ENDED'
+
+  useEffect(() => {
+    if (!live) return
+    let stopped = false
+    const tick = async () => {
+      try {
+        const s = await loadRoster()
+        if (s && (s.phase === 'ENDED' || new Date(s.expiresAt) <= new Date())) stopped = true
+      } catch (err) {
+        stopped = true
+        fail(err)
+      }
+      if (stopped) clearInterval(timer)
+    }
+    const timer = setInterval(tick, POLL_MS)
+    tick()
+    return () => clearInterval(timer)
+  }, [live, session?.id, loadRoster, fail])
+
+  async function handleStart(groupId, subjectId) {
+    setBusy(true)
+    try {
+      show('Getting your location…')
+      const teacherLocation = await getTeacherLocation()
+      show('Creating attendance session…')
+      const data = await api(BASE, { method: 'POST', body: { groupId, subjectId, teacherLocation } })
+      sessionId.current = data.session._id
+      setStudents([])
+      setSession({ ...data.session, id: data.session._id })
+      show('Session created. Students can now join the lobby.', 'success')
+    } catch (err) {
+      fail(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function phaseAction(path, text, type) {
+    setBusy(true)
+    try {
+      const data = await api(`${BASE}/${session.id}/${path}`, { method: 'POST' })
+      setSession((s) => ({ ...s, ...data.session, id: s.id }))
+      show(text, type)
+    } catch (err) {
+      fail(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleEnd() {
+    setBusy(true)
+    try {
+      await api(`${BASE}/${session.id}/end`, { method: 'PATCH' })
+      setSession((s) => ({ ...s, phase: 'ENDED' }))
+      await loadRoster()
+      show('Attendance session ended and records finalised.', 'success')
+    } catch (err) {
+      fail(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleMark(studentId, status) {
+    try {
+      await api(`${BASE}/${session.id}/students/${studentId}/attendance`, { method: 'PATCH', body: { status } })
+      await loadRoster()
+    } catch (err) {
+      fail(err)
+    }
+  }
+
+  return (
+    <>
+      <header className="top">
+        <div>
+          <h1>SecureAttend Teacher Dashboard</h1>
+          <p>
+            Logged in as: {user.name} ({user.email}) - {user.role}
+          </p>
+        </div>
+        <button className="btn secondary logout" onClick={logout}>
+          Logout
+        </button>
+      </header>
+
+      {message && <div className={`msg ${message.type}`}>{message.text}</div>}
+
+      <AttendanceForm busy={busy || !!live} onStart={handleStart} onMessage={show} onError={fail} />
+
+      {session && (
+        <>
+          <SessionPanel
+            session={session}
+            busy={busy}
+            onStartAttendance={() =>
+              phaseAction('start-attendance', 'Attendance is now open. Students can submit their code.', 'success')
+            }
+            onStopAttendance={() => phaseAction('stop-attendance', 'Attendance is now closed.', 'info')}
+            onEnd={handleEnd}
+          />
+          <Roster students={students} phase={session.phase} onMark={handleMark} />
+        </>
+      )}
+    </>
+  )
+}
