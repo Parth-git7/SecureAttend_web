@@ -18,7 +18,7 @@ export default function Login() {
   return (
     <section className="login">
       <div className="login-box">
-        <h1>SecureAttend Teacher Login</h1>
+        <h1>SecureAttend Login</h1>
         <p>Sign in with your Chitkara Google account.</p>
         <GoogleLogin onSuccess={handleSuccess} onError={() => setError('Google sign-in failed')} />
         {error && <div className="err">{error}</div>}

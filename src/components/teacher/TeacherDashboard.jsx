@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api } from '../api'
-import { useAuth } from '../context/AuthContext'
-import { getTeacherLocation } from '../utils'
+import { api } from '../../api'
+import { useAuth } from '../../context/AuthContext'
+import { getTeacherLocation } from '../../utils'
 import AttendanceForm from './AttendanceForm'
 import SessionPanel from './SessionPanel'
 import Roster from './Roster'
-import { connectSocket } from '../socket'
+import { connectSocket } from '../../socket'
 
 const POLL_MS = 3000
 const BASE = '/api/attendance-sessions'
@@ -17,7 +17,7 @@ export default function Dashboard() {
   const [students, setStudents] = useState([])
   const [busy, setBusy] = useState(false)
   const sessionId = useRef(null)
-  // const socket = connectSocket('sa_teacher_token')
+  // const socket = connectSocket('sa_token')
 
   const show = useCallback((text, type = 'info') => setMessage(text ? { text, type } : null), [])
 
@@ -44,7 +44,7 @@ export default function Dashboard() {
   useEffect(() => {
   if (!live || !session?.id) return
 
-  const socket = connectSocket('sa_teacher_token')
+  const socket = connectSocket('sa_token')
   let fallback
 
   const sync = async () => {

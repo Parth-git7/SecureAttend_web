@@ -83,7 +83,7 @@ export default function ActiveSession({ session, onRefresh }) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('sa_student_token')}`,
+        Authorization: `Bearer ${localStorage.getItem('sa_token')}`,
       },
       body: body ? JSON.stringify(body) : undefined,
     })

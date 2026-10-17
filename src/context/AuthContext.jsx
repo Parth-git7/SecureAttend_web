@@ -1,43 +1,49 @@
-import { createContext, useContext, useState } from 'react'
+// src/context/AuthContext.jsx
+import { createContext, useCallback, useContext, useState } from 'react'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() =>
-    JSON.parse(localStorage.getItem('sa_teacher_user') || 'null')
-  )
+  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('sa_user') || 'null'))
 
-  async function loginWithGoogle(credential) {
+  const loginWithGoogle = useCallback(async (credential) => {
     const res = await fetch('/api/auth/google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ credential }),
     })
     const data = await res.json()
-
     if (!res.ok) throw new Error(data.message || 'Authentication failed')
-    if (data.user.role !== 'TEACHER') {
-      throw new Error('Access denied. Teacher privileges required.')
-    }
-
-    localStorage.setItem('sa_teacher_token', data.token)
-    localStorage.setItem('sa_teacher_user', JSON.stringify(data.user))
+    localStorage.setItem('sa_token', data.token)
+    localStorage.setItem('sa_user', JSON.stringify(data.user))
     setUser(data.user)
-  }
+  }, [])
 
-  function logout() {
-    localStorage.removeItem('sa_teacher_token')
-    localStorage.removeItem('sa_teacher_user')
+  // Email + password login — used by Admin (and any non-Google role)
+  const login = useCallback(async (email, password) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Authentication failed')
+    localStorage.setItem('sa_token', data.token)
+    localStorage.setItem('sa_user', JSON.stringify(data.user))
+    setUser(data.user)
+  }, [])
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('sa_token')
+    localStorage.removeItem('sa_user')
     setUser(null)
-  }
+  }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loginWithGoogle, login, logout }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-export function useAuth() {
-  return useContext(AuthContext)
-}
+export const useAuth = () => useContext(AuthContext)

@@ -1,12 +1,12 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
-import { useStudentAuth } from '../../context/StudentAuthContext'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAuth } from '../../context/AuthContext'
 import ActiveSession from './ActiveSession'
 import { connectSocket } from '../../socket'
 
 const POLL_MS = 30000
 
 export default function StudentDashboard() {
-const { user, logout } = useStudentAuth()
+const { user, logout } = useAuth()
 
 const [session, setSession] = useState(undefined)
 const [error, setError] = useState('')
@@ -16,7 +16,7 @@ const fetchSession = useCallback(async () => {
 try {
 const res = await fetch('/api/attendance-sessions/active', {
 headers: {
-Authorization: `Bearer ${localStorage.getItem('sa_student_token')}`,
+Authorization: `Bearer ${localStorage.getItem('sa_token')}`,
 },
 })
 
@@ -43,7 +43,7 @@ Authorization: `Bearer ${localStorage.getItem('sa_student_token')}`,
 
 // Connect the student to real-time session updates.
 useEffect(() => {
-const socket = connectSocket('sa_student_token')
+const socket = connectSocket('sa_token')
 
 socket.on('ready', fetchSession)
 socket.on('session:changed', fetchSession)

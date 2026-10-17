@@ -3,7 +3,7 @@ export async function api(path, { method = 'GET', body } = {}) {
     method,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('sa_teacher_token')}`,
+      Authorization: `Bearer ${localStorage.getItem('sa_token')}`,
     },
     body: body ? JSON.stringify(body) : undefined,
   })
