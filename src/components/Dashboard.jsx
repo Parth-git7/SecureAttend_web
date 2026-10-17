@@ -5,6 +5,7 @@ import { getTeacherLocation } from '../utils'
 import AttendanceForm from './AttendanceForm'
 import SessionPanel from './SessionPanel'
 import Roster from './Roster'
+import { connectSocket } from '../socket'
 
 const POLL_MS = 3000
 const BASE = '/api/attendance-sessions'
@@ -16,6 +17,7 @@ export default function Dashboard() {
   const [students, setStudents] = useState([])
   const [busy, setBusy] = useState(false)
   const sessionId = useRef(null)
+  // const socket = connectSocket('sa_teacher_token')
 
   const show = useCallback((text, type = 'info') => setMessage(text ? { text, type } : null), [])
 
@@ -40,22 +42,47 @@ export default function Dashboard() {
   const live = session && session.phase !== 'ENDED'
 
   useEffect(() => {
-    if (!live) return
-    let stopped = false
-    const tick = async () => {
-      try {
-        const s = await loadRoster()
-        if (s && (s.phase === 'ENDED' || new Date(s.expiresAt) <= new Date())) stopped = true
-      } catch (err) {
-        stopped = true
-        fail(err)
+  if (!live || !session?.id) return
+
+  const socket = connectSocket('sa_teacher_token')
+  let fallback
+
+  const sync = async () => {
+    try {
+      const s = await loadRoster()
+
+      if (s && new Date(s.expiresAt) <= new Date()) {
+        clearInterval(fallback)
+        socket.disconnect()
       }
-      if (stopped) clearInterval(timer)
+    } catch (err) {
+      fail(err)
     }
-    const timer = setInterval(tick, POLL_MS)
-    tick()
-    return () => clearInterval(timer)
-  }, [live, session?.id, loadRoster, fail])
+  }
+
+  socket.on('connect', () => {
+    socket.emit('watch', session.id, (success) => {
+      if (success) {
+        sync()
+      } else {
+        console.error('Socket could not watch this attendance session.')
+      }
+    })
+  })
+
+  socket.on('roster:changed', sync)
+
+  socket.on('connect_error', (err) => {
+    console.error('Socket connection failed:', err.message)
+  })
+
+  fallback = setInterval(sync, 30000)
+
+  return () => {
+    clearInterval(fallback)
+    socket.disconnect()
+  }
+}, [live, session?.id, loadRoster, fail])
 
   async function handleStart(groupId, subjectId) {
     setBusy(true)
