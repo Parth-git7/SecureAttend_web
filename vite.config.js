@@ -3,10 +3,19 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
+  
   server: {
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
-      '/api': 'http://127.0.0.1:3000',
-      '/socket.io': { target: 'http://127.0.0.1:3000', ws: true },
+      '/api': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://127.0.0.1:3000',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   }
 })

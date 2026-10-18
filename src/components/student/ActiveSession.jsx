@@ -1,4 +1,4 @@
-﻿import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // ─── geo helper ──────────────────────────────────────────────
 function getStudentLocation() {
@@ -22,35 +22,18 @@ function getStudentLocation() {
   })
 }
 
-// ─── camera helper ───────────────────────────────────────────
-async function captureFrames(videoEl, count = 3, gapMs = 400) {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 640 } },
-    audio: false,
-  })
-  try {
-    videoEl.srcObject = stream
-    await videoEl.play()
-    await new Promise((r) => setTimeout(r, 800))
-    const scale = Math.min(1, 640 / videoEl.videoWidth)
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(videoEl.videoWidth * scale)
-    canvas.height = Math.round(videoEl.videoHeight * scale)
-    const ctx = canvas.getContext('2d')
-    const frames = []
-    for (let i = 0; i < count; i++) {
-      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height)
-      frames.push(canvas.toDataURL('image/jpeg', 0.85))
-      if (i < count - 1) await new Promise((r) => setTimeout(r, gapMs))
-    }
-    return frames
-  } finally {
-    stream.getTracks().forEach((t) => t.stop())
-    videoEl.srcObject = null
-  }
+// ─── single-frame grab (unmirrored, max 640px wide) ──────────
+function grabFrame(video) {
+  const scale = Math.min(1, 640 / video.videoWidth)
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(video.videoWidth * scale)
+  canvas.height = Math.round(video.videoHeight * scale)
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+  return canvas.toDataURL('image/jpeg', 0.9)
 }
 
 // ─── constants ───────────────────────────────────────────────
+
 const LOC_MSG = {
   NO_LOCATION: 'Your location could not be accessed.',
   FAIL_FAR: 'You seem too far from the classroom.',
@@ -66,6 +49,15 @@ const PHASE_LABEL = {
   ATTENDANCE_OPEN: 'Attendance Open',
   ATTENDANCE_CLOSED: 'Attendance Closed',
 }
+const CAMERA_WARMUP_MS = 700 // let auto-exposure/focus settle before Verify is enabled
+
+const HUMOUR_LINES = [
+  'Say cheese, not proxy.',
+  'Smile. Your attendance has trust issues.',
+  'Look here, attendance paglu.',
+  'Look here, cutiepie.',
+  'You would be cute, if you could smile.',
+]
 
 // ─── component ───────────────────────────────────────────────
 export default function ActiveSession({ session, onRefresh }) {
@@ -73,10 +65,64 @@ export default function ActiveSession({ session, onRefresh }) {
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
+  const [camReady, setCamReady] = useState(false)
+  const [humorLine, setHumorLine] = useState('')
+
   const videoRef = useRef(null)
+  const streamRef = useRef(null)
+  const pendingRef = useRef(null) // { resolve, reject } for the pending capture
 
   const prevReasons = [LOC_MSG[session.myLocationResult], FACE_MSG[session.myFaceResult]].filter(Boolean)
   const prevFailed = prevReasons.length > 0
+
+  // make sure the camera is released if the component unmounts mid-capture
+  useEffect(() => () => stopCamera(), [])
+
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setShowCamera(false)
+    setCamReady(false)
+  }
+
+  // Opens the camera and resolves with ONE frame when the student taps Verify.
+  // Rejects with { cancelled: true } if they tap Cancel.
+  async function captureFace() {
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 } },
+        audio: false,
+      })
+    } catch {
+      throw new Error('Camera access is needed to verify your face. Allow camera permission and try again.')
+    }
+    streamRef.current = stream
+    const video = videoRef.current
+    video.srcObject = stream
+    await video.play()
+    setHumorLine(HUMOUR_LINES[Math.floor(Math.random() * HUMOUR_LINES.length)])
+    setShowCamera(true)
+    setTimeout(() => setCamReady(true), CAMERA_WARMUP_MS)
+
+    return new Promise((resolve, reject) => {
+      pendingRef.current = { resolve, reject }
+    })
+  }
+
+  function handleVerifyTap() {
+    const video = videoRef.current
+    if (!video || !video.videoWidth || !pendingRef.current) return
+    const frame = grabFrame(video)
+    pendingRef.current.resolve(frame)
+    pendingRef.current = null
+  }
+
+  function handleCancelTap() {
+    pendingRef.current?.reject(Object.assign(new Error('cancelled'), { cancelled: true }))
+    pendingRef.current = null
+  }
 
   async function postAction(path, body) {
     const res = await fetch(path, {
@@ -110,31 +156,28 @@ export default function ActiveSession({ session, onRefresh }) {
     setBusy(true)
     setMsg('')
     try {
-      const payload = { roomCode: roomCode.trim().toUpperCase() }
-      setMsg('Getting your location…')
-      try {
-        payload.studentLocation = await getStudentLocation()
-      } catch (err) {
-        payload.locationError = err.locationError || 'UNAVAILABLE'
-      }
-      setMsg('Look at the camera…')
-      setShowCamera(true)
-      try {
-        payload.frames = await captureFrames(videoRef.current)
-      } catch (err) {
-        console.error('Camera error:', err)
-      } finally {
-        setShowCamera(false)
-      }
-      setMsg('Submitting…')
-      await postAction(`/api/attendance-sessions/${session.sessionId}/verify`, payload)
+      // fetch location in the background while the student lines up their face
+      const locationPromise = getStudentLocation()
+        .then((studentLocation) => ({ studentLocation }))
+        .catch((err) => ({ locationError: err.locationError || 'UNAVAILABLE' }))
+
+      const frame = await captureFace() // waits for the student to tap Verify
+      stopCamera()
+
+      setMsg('Verifying…')
+      const loc = await locationPromise
+      await postAction(`/api/attendance-sessions/${session.sessionId}/verify`, {
+        roomCode: roomCode.trim().toUpperCase(),
+        ...loc,
+        frames: [frame],
+      })
       setMsg('')
       await onRefresh()
     } catch (err) {
-      setMsg(err.message)
+      setMsg(err.cancelled ? '' : err.message)
     } finally {
+      stopCamera()
       setBusy(false)
-      setShowCamera(false)
     }
   }
 
@@ -211,7 +254,7 @@ export default function ActiveSession({ session, onRefresh }) {
           disabled={busy}
           onClick={handleSubmit}
         >
-          {busy ? (msg || 'Processing…') : prevFailed ? '🔄 Retry Submission' : 'Submit Code'}
+          {busy ? (msg || 'Processing…') : prevFailed ? '🔄 Retry & Scan Face' : 'Submit Code & Scan Face'}
         </button>
         <button
           id="review-btn"
@@ -234,14 +277,59 @@ export default function ActiveSession({ session, onRefresh }) {
 
   return (
     <>
-      {/* Camera overlay — always in DOM so ref is always attached */}
+      {/* Camera overlay — always in DOM so videoRef is always attached */}
       <div className={`s-camera-overlay${showCamera ? ' visible' : ''}`} aria-hidden={!showCamera}>
         <div className="s-camera-modal">
-          <p>📸 Look straight at the camera…</p>
+
+          {/* 1. Humour line to look at camera */}
+          <div className="s-camera-header">
+            <span className="s-camera-eyebrow">Face Verification</span>
+            <p className="s-camera-humor">{humorLine || 'Look directly at the camera'}</p>
+          </div>
+
+          {/* 2. Image of person */}
           <div className="s-camera-frame">
             <video ref={videoRef} playsInline muted autoPlay className="s-camera-video" />
-            <div className="s-camera-guide" />
+            <div className="s-camera-oval" />
           </div>
+
+          {/* 3. Submit button & 4. Under it cancel button */}
+          <div className="s-camera-actions">
+            <button
+              type="button"
+              className="s-btn primary s-camera-btn-submit"
+              id="verify-face-btn"
+              disabled={!camReady}
+              onClick={handleVerifyTap}
+            >
+              {camReady ? 'Submit Attendance' : 'Starting camera…'}
+            </button>
+            <button
+              type="button"
+              className="s-camera-btn-cancel"
+              id="cancel-face-btn"
+              onClick={handleCancelTap}
+            >
+              Cancel
+            </button>
+          </div>
+
+          {/* 5. Three clear instructions stacked vertically */}
+          <div className="s-camera-instructions">
+            <div className="s-camera-step">
+              <span className="s-camera-step-num">1</span>
+              <span>Center your face inside the oval</span>
+            </div>
+            <div className="s-camera-step">
+              <span className="s-camera-step-num">2</span>
+              <span>Look directly at the camera at eye level</span>
+            </div>
+            <div className="s-camera-step">
+              <span className="s-camera-step-num">3</span>
+              <span>Ensure good lighting without cap or mask</span>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -266,7 +354,7 @@ export default function ActiveSession({ session, onRefresh }) {
 
         <div className="s-action-area">{actionContent}</div>
 
-        {msg && <p className="s-status-msg">{msg}</p>}
+        {msg && !busy && <p className="s-status-msg">{msg}</p>}
       </div>
     </>
   )

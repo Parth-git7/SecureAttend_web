@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import ActiveSession from './ActiveSession'
 import { connectSocket } from '../../socket'
 
-const POLL_MS = 30000
+const POLL_MS = 10000
 
 export default function StudentDashboard() {
 const { user, logout } = useAuth()
@@ -41,23 +41,38 @@ Authorization: `Bearer ${localStorage.getItem('sa_token')}`,
 
 }, [logout])
 
-// Connect the student to real-time session updates.
-useEffect(() => {
-const socket = connectSocket('sa_token')
+  // Connect the student to real-time session updates.
+  useEffect(() => {
+    const socket = connectSocket('sa_token')
 
-socket.on('ready', fetchSession)
-socket.on('session:changed', fetchSession)
+    socket.on('connect', () => {
+      console.log('[Student socket] connected, syncing session…')
+      fetchSession()
+    })
 
-socket.on('connect_error', (err) => {
-  console.error('Student socket connection failed:', err.message)
-})
+    socket.on('ready', fetchSession)
+    socket.on('session:changed', fetchSession)
 
-return () => {
-  socket.disconnect()
-}
+    socket.on('connect_error', (err) => {
+      console.error('Student socket connection failed:', err.message)
+    })
 
+    // On mobile: wake up, reconnect, and refresh when returning to browser tab
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchSession()
+        if (!socket.connected) {
+          socket.connect()
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
 
-}, [fetchSession])
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      socket.disconnect()
+    }
+  }, [fetchSession])
 
 // Fetch initially and periodically as a fallback.
 useEffect(() => {
