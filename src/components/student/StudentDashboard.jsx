@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import ActiveSession from './ActiveSession'
 import { connectSocket } from '../../socket'
+import { preloadLandmarker } from '../../liveness'
 
 const POLL_MS = 10000
 
@@ -76,19 +77,24 @@ Authorization: `Bearer ${localStorage.getItem('sa_token')}`,
 
 // Fetch initially and periodically as a fallback.
 useEffect(() => {
-fetchSession()
+  fetchSession()
 
 
-pollRef.current = setInterval(fetchSession, POLL_MS)
+  pollRef.current = setInterval(fetchSession, POLL_MS)
 
-return () => {
-  if (pollRef.current) {
-    clearInterval(pollRef.current)
+  return () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+    }
   }
-}
 
 
 }, [fetchSession])
+
+// loads mediapipe models
+useEffect(() => {
+  preloadLandmarker()
+}, [])
 
 const initial = user.name?.[0]?.toUpperCase() ?? '?'
 

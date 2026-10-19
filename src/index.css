@@ -451,6 +451,12 @@ td.act {
   text-align: right;
 }
 
+td.act .btn {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 5px 12px;
+}
+
 td.act .btn+.btn {
   margin-left: 5px;
 }
@@ -493,6 +499,19 @@ td.act .btn+.btn {
   font-size: 11.5px;
   font-weight: 500;
   border: 1px solid;
+}
+
+.roster-badge {
+  padding: 4px 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.roster-badge.b-ABSENT {
+  color: #4A4540;
+  background: #EAE6DE;
+  border-color: #D6D0C7;
 }
 
 .b-ABSENT,

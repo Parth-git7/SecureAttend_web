@@ -2,7 +2,7 @@ import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
 
 let loading = null
 
-// Loads once, then reused. Call early so it's warm when the camera opens.
+// Loads once, warms up, then is reused.
 export function loadLandmarker() {
   if (!loading) {
     loading = (async () => {
@@ -14,11 +14,21 @@ export function loadLandmarker() {
           numFaces: 1,
           outputFaceBlendshapes: true,
         })
+      let lm
       try {
-        return await make('GPU')
+        lm = await make('GPU')
       } catch {
-        return await make('CPU') // some phones have no usable GPU delegate
+        lm = await make('CPU') // some phones have no usable GPU delegate
       }
+      // warm-up: the first detection compiles shaders and is slow
+      try {
+        const c = document.createElement('canvas')
+        c.width = c.height = 128
+        lm.detectForVideo(c, performance.now())
+      } catch {
+        /* ignore */
+      }
+      return lm
     })().catch((e) => {
       loading = null
       throw e
@@ -26,6 +36,9 @@ export function loadLandmarker() {
   }
   return loading
 }
+
+// Fire and forget. Safe to call many times.
+export const preloadLandmarker = () => loadLandmarker().catch(() => {})
 
 const score = (cats, name) => cats.find((c) => c.categoryName === name)?.score ?? 0
 
@@ -81,7 +94,7 @@ export const CHALLENGES = [
   { id: 'left', text: 'Turn your head left', make: () => hold((f) => f.yaw > 0.64) },
 ]
 
-export function pickChallenges(n = 3) {
+export function pickChallenges(n = 2) {
   return [...CHALLENGES].sort(() => Math.random() - 0.5).slice(0, n)
 }
 

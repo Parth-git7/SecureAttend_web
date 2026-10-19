@@ -1,4 +1,4 @@
-﻿const STATUS_LABEL = {
+const STATUS_LABEL = {
   ABSENT: 'Absent',
   JOINED: 'Joined',
   PRESENT: 'Present',
@@ -17,8 +17,8 @@ export default function Roster({ students, phase, onMark }) {
       <div className="panel-head">
         <h2>Student Roster</h2>
         {total > 0 && (
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-            {present} / {total} present ({pct}%)
+          <span style={{ fontSize: 13.5, color: 'var(--muted)', fontWeight: 500 }}>
+            <strong style={{ color: 'var(--ink)' }}>{present}</strong> / {total} present ({pct}%)
           </span>
         )}
       </div>
@@ -40,7 +40,6 @@ export default function Roster({ students, phase, onMark }) {
                 <th>Name</th>
                 <th>Enrollment No.</th>
                 <th>Status</th>
-                <th>Submitted At</th>
                 {!ended && <th>Actions</th>}
               </tr>
             </thead>
@@ -54,11 +53,10 @@ export default function Roster({ students, phase, onMark }) {
                       <div className="note">⚠ Flagged for review — location or face mismatch</div>
                     )}
                   </td>
-                  <td>{s.enrollmentNo || '—'}</td>
+                  <td>{(s.rollNo ?? s.enrollmentNo) || '—'}</td>
                   <td>
-                    <span className={`badge b-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>
+                    <span className={`badge roster-badge b-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>
                   </td>
-                  <td>{s.submittedAt ? new Date(s.submittedAt).toLocaleTimeString([], { timeStyle: 'medium' }) : '—'}</td>
                   {!ended && (
                     <td className="act">
                       {s.status !== 'PRESENT' && (

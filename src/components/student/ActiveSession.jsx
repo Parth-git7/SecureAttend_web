@@ -76,6 +76,7 @@ export default function ActiveSession({ session, onRefresh }) {
   const [serverDone, setServerDone] = useState(false)
   const [result, setResult] = useState(null) // { ok, text }
   const [humorLine, setHumorLine] = useState('')
+  const [modelReady, setModelReady] = useState(false)
 
   const videoRef = useRef(null)
   const streamRef = useRef(null)
@@ -89,8 +90,12 @@ export default function ActiveSession({ session, onRefresh }) {
 
   // warm up the liveness model in the background, and release camera on unmount
   useEffect(() => {
-    loadLandmarker().catch(() => {})
+    let alive = true
+    loadLandmarker()
+      .then(() => alive && setModelReady(true))
+      .catch(() => {})
     return () => {
+      alive = false
       cancelRef.current = true
       stopCamera()
     }
@@ -199,7 +204,7 @@ export default function ActiveSession({ session, onRefresh }) {
 
   // Runs the random challenges one by one. Returns true if all passed.
   async function runLiveness(landmarker) {
-    const chosen = pickChallenges(3)
+    const chosen = pickChallenges(2)
     setSteps(chosen)
     setStepIdx(0)
     setPhase('liveness')
@@ -344,7 +349,7 @@ export default function ActiveSession({ session, onRefresh }) {
   let actionContent
 
   if (myStatus === 'PRESENT') {
-    actionContent = <div className="s-status-pill present">✅ You are marked <strong>PRESENT</strong></div>
+    actionContent = <div className="s-status-pill present"> You are marked <strong>PRESENT</strong></div>
   } else if (myStatus === 'REVIEW') {
     actionContent = (
       <div className="s-status-pill review">
@@ -354,7 +359,7 @@ export default function ActiveSession({ session, onRefresh }) {
   } else if (myStatus === 'ABSENT') {
     actionContent = <div className="s-status-pill absent">❌ You were marked <strong>ABSENT</strong> by the teacher</div>
   } else if (sessionPhase === 'ATTENDANCE_CLOSED') {
-    actionContent = <div className="s-status-pill closed">🔒 Attendance is now closed</div>
+    actionContent = <div className="s-status-pill closed"> Attendance is now closed</div>
   } else if (sessionPhase === 'LOBBY') {
     actionContent = myStatus === 'JOINED' ? (
       <div className="s-lobby-wait">
@@ -396,10 +401,14 @@ export default function ActiveSession({ session, onRefresh }) {
         <button
           id="submit-code-btn"
           className="s-btn primary"
-          disabled={busy}
+          disabled={busy || !modelReady}
           onClick={handleSubmit}
         >
-          {busy ? (msg || 'Processing…') : prevFailed ? '🔄 Retry & Scan Face' : 'Submit Code & Scan Face'}
+          {busy
+            ? (msg || 'Processing…')
+            : !modelReady
+              ? 'Preparing face check…'
+              : prevFailed ? 'Retry & Scan Face' : 'Submit Code & Scan Face'}
         </button>
         <button
           id="review-btn"
