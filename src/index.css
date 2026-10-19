@@ -1622,3 +1622,9 @@ td.act .btn+.btn {
   color: var(--muted);
   margin: 0 0 10px;
 }
+
+/* Center Actions column in the teacher roster only */
+th.act-c,
+td.act.act-c {
+  text-align: center;
+}
