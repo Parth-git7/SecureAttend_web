@@ -40,7 +40,7 @@ export default function Roster({ students, phase, onMark }) {
                 <th>Name</th>
                 <th>Enrollment No.</th>
                 <th>Status</th>
-                {!ended && <th>Actions</th>}
+                {!ended && <th className="act-c">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -58,7 +58,7 @@ export default function Roster({ students, phase, onMark }) {
                     <span className={`badge roster-badge b-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>
                   </td>
                   {!ended && (
-                    <td className="act">
+                    <td className="act act-c">
                       {s.status !== 'PRESENT' && (
                         <button className="btn sm ok" onClick={() => onMark(s.studentId, 'PRESENT')}>
                           Mark Present
