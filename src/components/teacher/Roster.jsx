@@ -5,7 +5,7 @@ const STATUS_LABEL = {
   REVIEW: 'Review',
 }
 
-export default function Roster({ students, phase, onMark }) {
+export default function Roster({ students, phase, onMark, onExport }) {
   const ended = phase === 'ENDED'
 
   const present = students.filter((s) => s.status === 'PRESENT').length
@@ -16,11 +16,14 @@ export default function Roster({ students, phase, onMark }) {
     <section className="panel">
       <div className="panel-head">
         <h2>Student Roster</h2>
-        {total > 0 && (
-          <span style={{ fontSize: 13.5, color: 'var(--muted)', fontWeight: 500 }}>
-            <strong style={{ color: 'var(--ink)' }}>{present}</strong> / {total} present ({pct}%)
-          </span>
-        )}
+        <div className="actions" style={{ alignItems: 'center' }}>
+          {total > 0 && (
+            <span style={{ fontSize: 13.5, color: 'var(--muted)', fontWeight: 500 }}>
+              <strong style={{ color: 'var(--ink)' }}>{present}</strong> / {total} present ({pct}%)
+            </span>
+          )}
+          <button className="btn sm" disabled={!total} onClick={onExport}>Export Excel</button>
+        </div>
       </div>
 
       {total > 0 && (

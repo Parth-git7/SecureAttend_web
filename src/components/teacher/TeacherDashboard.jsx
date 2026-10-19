@@ -138,6 +138,29 @@ export default function Dashboard() {
     }
   }
 
+  async function handleExport() {
+    try {
+      const res = await fetch(`${BASE}/${session.id}/export`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('sa_token')}` },
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        const err = new Error(d.message || 'Export failed')
+        err.status = res.status
+        throw err
+      }
+      const name = /filename="(.+?)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || 'attendance.xlsx'
+      const url = URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = name
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      fail(err)
+    }
+  }
+
   return (
     <>
       <header className="top">
@@ -167,7 +190,7 @@ export default function Dashboard() {
             onStopAttendance={() => phaseAction('stop-attendance', 'Attendance is now closed.', 'info')}
             onEnd={handleEnd}
           />
-          <Roster students={students} phase={session.phase} onMark={handleMark} />
+          <Roster students={students} phase={session.phase} onMark={handleMark} onExport={handleExport} />
         </>
       )}
     </>
