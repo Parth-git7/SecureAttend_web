@@ -7,7 +7,6 @@ import SessionPanel from './SessionPanel'
 import Roster from './Roster'
 import { connectSocket } from '../../socket'
 
-const POLL_MS = 3000
 const BASE = '/api/attendance-sessions'
 
 export default function Dashboard() {
@@ -42,47 +41,47 @@ export default function Dashboard() {
   const live = session && session.phase !== 'ENDED'
 
   useEffect(() => {
-  if (!live || !session?.id) return
+    if (!live || !session?.id) return
 
-  const socket = connectSocket('sa_token')
-  let fallback
+    const socket = connectSocket('sa_token')
+    let fallback
 
-  const sync = async () => {
-    try {
-      const s = await loadRoster()
+    const sync = async () => {
+      try {
+        const s = await loadRoster()
 
-      if (s && new Date(s.expiresAt) <= new Date()) {
-        clearInterval(fallback)
-        socket.disconnect()
+        if (s && new Date(s.expiresAt) <= new Date()) {
+          clearInterval(fallback)
+          socket.disconnect()
+        }
+      } catch (err) {
+        fail(err)
       }
-    } catch (err) {
-      fail(err)
     }
-  }
 
-  socket.on('connect', () => {
-    socket.emit('watch', session.id, (success) => {
-      if (success) {
-        sync()
-      } else {
-        console.error('Socket could not watch this attendance session.')
-      }
+    socket.on('connect', () => {
+      socket.emit('watch', session.id, (success) => {
+        if (success) {
+          sync()
+        } else {
+          console.error('Socket could not watch this attendance session.')
+        }
+      })
     })
-  })
 
-  socket.on('roster:changed', sync)
+    socket.on('roster:changed', sync)
 
-  socket.on('connect_error', (err) => {
-    console.error('Socket connection failed:', err.message)
-  })
+    socket.on('connect_error', (err) => {
+      console.error('Socket connection failed:', err.message)
+    })
 
-  fallback = setInterval(sync, 30000)
+    fallback = setInterval(sync, 30000)
 
-  return () => {
-    clearInterval(fallback)
-    socket.disconnect()
-  }
-}, [live, session?.id, loadRoster, fail])
+    return () => {
+      clearInterval(fallback)
+      socket.disconnect()
+    }
+  }, [live, session?.id, loadRoster, fail])
 
   async function handleStart(groupId, subjectId) {
     setBusy(true)

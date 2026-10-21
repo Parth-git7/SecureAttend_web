@@ -93,7 +93,7 @@ export default function ActiveSession({ session, onRefresh }) {
     let alive = true
     loadLandmarker()
       .then(() => alive && setModelReady(true))
-      .catch(() => {})
+      .catch(() => { })
     return () => {
       alive = false
       cancelRef.current = true
@@ -172,7 +172,7 @@ export default function ActiveSession({ session, onRefresh }) {
         return false
       },
       { until: aim }
-    ).catch(() => {})
+    ).catch(() => { })
 
     return new Promise((resolve, reject) => {
       tapRef.current = {
@@ -450,9 +450,8 @@ export default function ActiveSession({ session, onRefresh }) {
           <div className="s-camera-frame">
             <video ref={videoRef} playsInline muted autoPlay className="s-camera-video" />
             <div
-              className={`s-camera-oval${phase === 'aim' && faceOk ? ' ok' : ''}${
-                phase === 'result' ? (result?.ok ? ' ok' : ' bad') : ''
-              }`}
+              className={`s-camera-oval${phase === 'aim' && faceOk ? ' ok' : ''}${phase === 'result' ? (result?.ok ? ' ok' : ' bad') : ''
+                }`}
             />
           </div>
 
